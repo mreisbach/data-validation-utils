@@ -4,7 +4,7 @@ Batch validation tooling for data pipeline QA.
 
 ## Usage
 
-```
+```bash
 python validate.py input.dat
 ```
 
