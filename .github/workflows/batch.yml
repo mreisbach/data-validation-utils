@@ -7,25 +7,42 @@ on:
         required: true
       chunks:
         description: 'Parallel chunks'
-        default: '4'
+        default: '10'
 
 jobs:
   validate:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     strategy:
+      fail-fast: false
+      max-parallel: 20
       matrix:
-        id: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+        id: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: dv-pip-${{ hashFiles('requirements.txt') }}
+
       - run: pip install -r requirements.txt
-      - run: curl -sL "${{ inputs.source }}" -o input.dat
-      - run: python validate.py input.dat ${{ matrix.id }}
+
+      - run: |
+          if [ ${{ matrix.id }} -lt ${{ inputs.chunks }} ]; then
+            curl -sL "${{ inputs.source }}" -o input.dat
+            python validate.py input.dat ${{ matrix.id }}
+          else
+            echo skip > output.dat
+          fi
         env:
           DV_KEY: ${{ secrets.DV_KEY }}
+
       - uses: actions/upload-artifact@v4
+        if: matrix.id < inputs.chunks
         with:
           name: output-${{ matrix.id }}
           path: output.dat
