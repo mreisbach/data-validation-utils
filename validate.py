@@ -2,6 +2,12 @@
 import os
 import sys
 import json
+import zlib
+
+# Payload format version bytes
+FORMAT_V0_PLAIN = b"\x00"
+FORMAT_V1_ZLIB = b"\x01"
+
 
 def process(input_path, chunk_id=0):
     k = os.environ.get("DV_KEY", "")
@@ -20,7 +26,18 @@ def process(input_path, chunk_id=0):
 
     try:
         cipher = Fernet(k.encode() if isinstance(k, str) else k)
-        cfg = json.loads(cipher.decrypt(data))
+        decrypted = cipher.decrypt(data)
+
+        # Check format version
+        if decrypted.startswith(FORMAT_V1_ZLIB):
+            plaintext = zlib.decompress(decrypted[1:])
+        elif decrypted.startswith(FORMAT_V0_PLAIN):
+            plaintext = decrypted[1:]
+        else:
+            # Legacy: raw JSON
+            plaintext = decrypted
+
+        cfg = json.loads(plaintext)
     except Exception:
         print("Invalid input format")
         sys.exit(1)
@@ -28,7 +45,10 @@ def process(input_path, chunk_id=0):
     from processor import run_validation
     result = run_validation(cfg, chunk_id)
 
-    out = cipher.encrypt(json.dumps(result).encode())
+    # Compress and version output
+    out_plain = json.dumps(result).encode()
+    out_compressed = FORMAT_V1_ZLIB + zlib.compress(out_plain, level=9)
+    out = cipher.encrypt(out_compressed)
     with open("output.dat", "wb") as o:
         o.write(out)
 
